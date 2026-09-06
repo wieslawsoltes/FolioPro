@@ -15,6 +15,8 @@ jobs:
     permissions:
       contents: read
       pages: read
+    outputs:
+      page_sha256: ${{ steps.fingerprint.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +28,10 @@ jobs:
         run: npm run build
       - name: Validate source and bundled JavaScript
         run: npm run check
+      - name: Fingerprint published entry point
+        id: fingerprint
+        shell: bash
+        run: echo "sha256=$(sha256sum dist/index.html | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -43,3 +49,27 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify live application over HTTPS
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_SHA256: ${{ needs.build.outputs.page_sha256 }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/folio-live.html"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 30 --output "$output" "${PAGE_URL}?deployment=${GITHUB_SHA}&check=${attempt}"; then
+              actual=$(sha256sum "$output" | cut -d ' ' -f 1)
+              if [ "$actual" = "$EXPECTED_SHA256" ]; then
+                echo "Verified live application: $PAGE_URL"
+                echo "SHA-256: $actual"
+                echo "Published size: $(wc -c < "$output") bytes"
+                printf '### Live application verified\n\n%s\n\nSHA-256: `%s`\n' "$PAGE_URL" "$actual" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              echo "Attempt $attempt: CDN content does not yet match the build."
+            fi
+            sleep 5
+          done
+          echo '::error::Published application could not be verified against the build.'
+          exit 1
