@@ -1,0 +1,32 @@
+{
+  "passed": 22,
+  "tests": [
+    "Standalone boot and real PDF text/rendering",
+    "Real page thumbnails",
+    "Keyboard search and on-page matches",
+    "Add text through the real UI",
+    "Keyboard undo and redo",
+    "Pointer-driven rectangle creation",
+    "Object nudge and duplication",
+    "Comment editing and HTML injection safety",
+    "Comment resolution",
+    "Native PDF text and checkbox form filling",
+    "Independent verification of edited and filled vector PDF",
+    "Page organizer, rotate, duplicate, reorder",
+    "Editable project round-trip preserves source and edit model",
+    "External ReportLab PDF import, ASCII85/Flate, image XObject rendering",
+    "Sanitized export: opaque pixels, no text/fonts/attachments, fresh metadata",
+    "Original remains in editable workspace; redaction export is separate",
+    "Externally generated cross-reference and object-stream PDF",
+    "Image insertion and actual PDF image export",
+    "Typed visual signature workflow",
+    "Crop and rotate verified in an independent PDF reader",
+    "Responsive narrow workspace without horizontal document overflow",
+    "No uncaught browser exceptions during integration suite"
+  ],
+  "browser": "144.0.7559.96",
+  "renderer": "Folio PDF \u00b7 offline",
+  "compositor": "Canvas 2D",
+  "gpuReason": "WebGPU is unavailable; explicit Canvas fallback",
+  "scope": "In-memory standalone HTML; managed browser disallows URL navigation. No hardware-GPU or IndexedDB-origin validation."
+}

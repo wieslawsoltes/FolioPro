@@ -1,0 +1,22 @@
+{
+  "name": "folio-pro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first PDF editing workspace with a native PDF kernel and WebGPU compositor",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "test:browser": "python tests/browser.py",
+    "check": "node scripts/check.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wieslawsoltes/FolioPro.git"
+  },
+  "homepage": "https://wieslawsoltes.github.io/FolioPro/"
+}

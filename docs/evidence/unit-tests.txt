@@ -1,0 +1,260 @@
+
+> folio-pro@0.1.0 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: Viewport rotation 0: all corners and inverse
+ok 1 - Viewport rotation 0: all corners and inverse
+  ---
+  duration_ms: 1.087673
+  type: 'test'
+  ...
+# Subtest: Viewport rotation 90: all corners and inverse
+ok 2 - Viewport rotation 90: all corners and inverse
+  ---
+  duration_ms: 0.182894
+  type: 'test'
+  ...
+# Subtest: Viewport rotation 180: all corners and inverse
+ok 3 - Viewport rotation 180: all corners and inverse
+  ---
+  duration_ms: 0.089214
+  type: 'test'
+  ...
+# Subtest: Viewport rotation 270: all corners and inverse
+ok 4 - Viewport rotation 270: all corners and inverse
+  ---
+  duration_ms: 0.074942
+  type: 'test'
+  ...
+# Subtest: Affine matrix composition and singular rejection
+ok 5 - Affine matrix composition and singular rejection
+  ---
+  duration_ms: 0.454563
+  type: 'test'
+  ...
+# Subtest: Page point rotation round-trips
+ok 6 - Page point rotation round-trips
+  ---
+  duration_ms: 0.661814
+  type: 'test'
+  ...
+# Subtest: Ranges preserve order and deduplicate
+ok 7 - Ranges preserve order and deduplicate
+  ---
+  duration_ms: 0.350246
+  type: 'test'
+  ...
+# Subtest: Ranges reject malformed and out-of-bound input
+ok 8 - Ranges reject malformed and out-of-bound input
+  ---
+  duration_ms: 0.165578
+  type: 'test'
+  ...
+# Subtest: History transaction, undo, redo, and branch isolation
+ok 9 - History transaction, undo, redo, and branch isolation
+  ---
+  duration_ms: 3.171552
+  type: 'test'
+  ...
+# Subtest: History rejects invalid transactions atomically
+ok 10 - History rejects invalid transactions atomically
+  ---
+  duration_ms: 0.453871
+  type: 'test'
+  ...
+# Subtest: History bounds memory and notifies only changes
+ok 11 - History bounds memory and notifies only changes
+  ---
+  duration_ms: 0.403366
+  type: 'test'
+  ...
+# Subtest: LRU honors recency, byte budget, and disposal
+ok 12 - LRU honors recency, byte budget, and disposal
+  ---
+  duration_ms: 0.243445
+  type: 'test'
+  ...
+# Subtest: Task pool bounds concurrency and recovers after failure
+ok 13 - Task pool bounds concurrency and recovers after failure
+  ---
+  duration_ms: 12.725594
+  type: 'test'
+  ...
+# Subtest: Project rejects executable image URLs and injected IDs
+ok 14 - Project rejects executable image URLs and injected IDs
+  ---
+  duration_ms: 0.480101
+  type: 'test'
+  ...
+# Subtest: Project rejects crop beyond source bounds and invalid opacity
+ok 15 - Project rejects crop beyond source bounds and invalid opacity
+  ---
+  duration_ms: 0.203195
+  type: 'test'
+  ...
+# Subtest: Binary base64 round trip covers all byte values
+ok 16 - Binary base64 round trip covers all byte values
+  ---
+  duration_ms: 11.642098
+  type: 'test'
+  ...
+# Subtest: HTML and color validation
+ok 17 - HTML and color validation
+  ---
+  duration_ms: 0.600141
+  type: 'test'
+  ...
+# Subtest: Lexer names, escaped/nested literal strings, hex and references
+ok 18 - Lexer names, escaped/nested literal strings, hex and references
+  ---
+  duration_ms: 2.070358
+  type: 'test'
+  ...
+# Subtest: Lexer dictionaries and array parsing
+ok 19 - Lexer dictionaries and array parsing
+  ---
+  duration_ms: 0.301573
+  type: 'test'
+  ...
+# Subtest: Unicode PDF string encoding round trip
+ok 20 - Unicode PDF string encoding round trip
+  ---
+  duration_ms: 0.86628
+  type: 'test'
+  ...
+# Subtest: Parser rejects malformed syntax
+ok 21 - Parser rejects malformed syntax
+  ---
+  duration_ms: 0.383866
+  type: 'test'
+  ...
+# Subtest: Serializer preserves escaping and rejects non-finite values
+ok 22 - Serializer preserves escaping and rejects non-finite values
+  ---
+  duration_ms: 0.229634
+  type: 'test'
+  ...
+# Subtest: Flate stream round trip
+ok 23 - Flate stream round trip
+  ---
+  duration_ms: 37.756683
+  type: 'test'
+  ...
+# Subtest: ASCII85 zero shortcut and known payload
+ok 24 - ASCII85 zero shortcut and known payload
+  ---
+  duration_ms: 0.468684
+  type: 'test'
+  ...
+# Subtest: ASCIIHex and RunLength streams
+ok 25 - ASCIIHex and RunLength streams
+  ---
+  duration_ms: 0.303075
+  type: 'test'
+  ...
+# Subtest: PNG predictor reconstructs Sub and Up rows
+ok 26 - PNG predictor reconstructs Sub and Up rows
+  ---
+  duration_ms: 3.449148
+  type: 'test'
+  ...
+# Subtest: TIFF predictor reconstructs RGB components
+ok 27 - TIFF predictor reconstructs RGB components
+  ---
+  duration_ms: 3.253324
+  type: 'test'
+  ...
+# Subtest: Unsupported stream codecs fail explicitly
+ok 28 - Unsupported stream codecs fail explicitly
+  ---
+  duration_ms: 0.528543
+  type: 'test'
+  ...
+# Subtest: Sample is a real four-page PDF with metadata and bookmarks
+ok 29 - Sample is a real four-page PDF with metadata and bookmarks
+  ---
+  duration_ms: 19.363901
+  type: 'test'
+  ...
+# Subtest: Sample exposes genuine AcroForm widgets
+ok 30 - Sample exposes genuine AcroForm widgets
+  ---
+  duration_ms: 9.866883
+  type: 'test'
+  ...
+# Subtest: Concurrent lazy resolution shares objects without false cycles
+ok 31 - Concurrent lazy resolution shares objects without false cycles
+  ---
+  duration_ms: 14.365807
+  type: 'test'
+  ...
+# Subtest: Inherited geometry and UserUnit produce normalized coordinates
+ok 32 - Inherited geometry and UserUnit produce normalized coordinates
+  ---
+  duration_ms: 1.502015
+  type: 'test'
+  ...
+# Subtest: Malformed, encrypted and XFA inputs reject
+ok 33 - Malformed, encrypted and XFA inputs reject
+  ---
+  duration_ms: 2.190679
+  type: 'test'
+  ...
+# Subtest: Vector export preserves source resources and writes genuine notes
+ok 34 - Vector export preserves source resources and writes genuine notes
+  ---
+  duration_ms: 18.951382
+  type: 'test'
+  ...
+# Subtest: Rotate, crop, extract and reorder are written into page structure
+ok 35 - Rotate, crop, extract and reorder are written into page structure
+  ---
+  duration_ms: 9.969007
+  type: 'test'
+  ...
+# Subtest: Source form overrides are flattened into explicit content
+ok 36 - Source form overrides are flattened into explicit content
+  ---
+  duration_ms: 17.231459
+  type: 'test'
+  ...
+# Subtest: New text and checkbox fields remain interactive and have both states
+ok 37 - New text and checkbox fields remain interactive and have both states
+  ---
+  duration_ms: 3.286243
+  type: 'test'
+  ...
+# Subtest: Pending redaction prevents vector export
+ok 38 - Pending redaction prevents vector export
+  ---
+  duration_ms: 0.21317
+  type: 'test'
+  ...
+# Subtest: Pending redaction requires explicit raster authorization
+ok 39 - Pending redaction requires explicit raster authorization
+  ---
+  duration_ms: 0.281383
+  type: 'test'
+  ...
+# Subtest: Unsupported vector text does not silently corrupt Unicode
+ok 40 - Unsupported vector text does not silently corrupt Unicode
+  ---
+  duration_ms: 0.2334
+  type: 'test'
+  ...
+# Subtest: Vector export writes opacity graphics state
+ok 41 - Vector export writes opacity graphics state
+  ---
+  duration_ms: 2.290909
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 41
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 203.610505
