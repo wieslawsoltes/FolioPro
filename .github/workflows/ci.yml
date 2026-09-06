@@ -1,0 +1,20 @@
+name: Validate Folio Pro
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+      - run: npm run build
+      - run: npm run check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-pro-standalone
+          path: dist/folio-pro.html
