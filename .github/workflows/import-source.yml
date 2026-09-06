@@ -1,0 +1,46 @@
+name: Import verified Folio Pro source
+on:
+  push:
+    branches: [main]
+    paths: ['.bootstrap/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: folio-source-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify and expand source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part-* > "$RUNNER_TEMP/folio-source.tar.xz"
+          echo "712726cd47a7e12505b851105f169a681dd49beb4aa33398bd5980a0bed75db4  $RUNNER_TEMP/folio-source.tar.xz" | sha256sum --check --strict
+          python3 - <<'PY'
+          import os, tarfile
+          with tarfile.open(os.path.join(os.environ['RUNNER_TEMP'], 'folio-source.tar.xz'), 'r:xz') as archive:
+              archive.extractall('.', filter='data')
+          PY
+      - run: npm test
+      - run: npm run build
+      - run: npm run check
+      - name: Commit complete application source and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -r .bootstrap
+          git add .gitignore LICENSE README.md assets docs index.html package.json scripts src tests dist
+          git commit -m "Import Folio Pro application, PDF engine, tests, and standalone build"
+          git push origin HEAD:main
