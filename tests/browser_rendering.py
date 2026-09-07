@@ -1,11 +1,11 @@
 """Secure-origin WebGPU rendering regressions using actual composited pixels.
 
 python -m pip install playwright==1.62.0 Pillow==12.0.0
-python -m playwright install --with-deps chromium
-npm run build && python tests/browser_rendering.py
+python -m playwright install --with-deps --no-shell chromium
+npm run build && xvfb-run -a python tests/browser_rendering.py
 
 FOLIO_URL targets a deployed build; FOLIO_CASES selects comma-separated cases.
-Linux CI uses Mesa lavapipe through the shared browser_runtime configuration.
+Linux CI uses SwiftShader/Vulkan through the shared browser_runtime configuration.
 Only the generated example document is opened, never personal user documents.
 """
 import asyncio
