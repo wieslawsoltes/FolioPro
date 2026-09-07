@@ -17,6 +17,8 @@ jobs:
   render:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      FOLIO_HEADED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,18 +39,14 @@ jobs:
           echo "VK_DRIVER_FILES=$driver" >> "$GITHUB_ENV"
       - run: npm run build
       - name: Probe native WebGPU device and presentation paths
-        env:
-          DEBUG: pw:browser*
         run: |
           mkdir -p tests/out/rendering
-          xvfb-run -a python tests/webgpu_probe.py 2>tests/out/rendering/probe-chromium.log
+          xvfb-run -a python tests/webgpu_probe.py
       - name: Verify real WebGPU and Canvas fallback pixels
         env:
-          FOLIO_HEADED: '1'
           FOLIO_URL: ${{ inputs.url }}
           FOLIO_CASES: ${{ inputs.cases }}
-          DEBUG: pw:browser*
-        run: xvfb-run -a python tests/browser_rendering.py 2>tests/out/rendering/chromium.log
+        run: xvfb-run -a python tests/browser_rendering.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,11 +1,12 @@
-"""Secure-origin, real WebGPU rendering regressions (SwiftShader in CI).
+"""Secure-origin WebGPU rendering regressions using actual composited pixels.
 
-python -m pip install playwright==1.57.0 Pillow==12.0.0
+python -m pip install playwright==1.62.0 Pillow==12.0.0
 python -m playwright install --with-deps chromium
 npm run build && python tests/browser_rendering.py
 
-FOLIO_URL optionally targets a deployed build instead of starting the local server.
-FOLIO_CASES is a comma-separated subset. No user PDFs are loaded or uploaded.
+FOLIO_URL targets a deployed build; FOLIO_CASES selects comma-separated cases.
+Linux CI uses Mesa lavapipe through the shared browser_runtime configuration.
+Only the generated example document is opened, never personal user documents.
 """
 import asyncio
 import io
@@ -13,10 +14,10 @@ import json
 import os
 import subprocess
 from pathlib import Path
-import sys
 
 from PIL import Image
 from playwright.async_api import async_playwright
+from browser_runtime import chromium_options
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'tests/out/rendering'
@@ -39,8 +40,8 @@ async def settle(page):
     }""")
     await page.wait_for_timeout(150)
 
-async def pixels(page, label, index=0):
-    """Inspect composited screen pixels, not only CPU rasters or status labels."""
+async def pixels(page, label, index=0, expected='WebGPU'):
+    """Fail on blank screen pixels OR an unintended switch to Canvas fallback."""
     await settle(page)
     await page.screenshot(path=str(OUT / f'{label}-workspace.png'))
     data = await page.locator('.paper').nth(index).screenshot(path=str(OUT / f'{label}-page.png'))
@@ -49,8 +50,11 @@ async def pixels(page, label, index=0):
     values = list(image.getdata())
     white = sum(min(p) > 245 for p in values) / len(values)
     dark = sum(max(p) < 180 for p in values) / len(values)
+    state = await page.evaluate(SNAPSHOT)
+    assert state['mode'] == expected, state
+    assert state['gpuClass'] == (expected == 'WebGPU'), state
     assert white > .25 and dark > .002, f'{label}: page pixels are blank (white={white:.3f}, dark={dark:.3f})'
-    print(f'PASS pixels {label}: white={white:.3f}, dark={dark:.3f}', flush=True)
+    print(f'PASS pixels {label}: {expected}, white={white:.3f}, dark={dark:.3f}', flush=True)
 
 async def scenario(browser, case, url, results):
     context = await browser.new_context(viewport={'width': 1666, 'height': 1000}, device_scale_factor=1)
@@ -77,7 +81,7 @@ async def scenario(browser, case, url, results):
     errors, console_errors = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
-    entry = {'case': case}
+    entry = {'case': case, 'browser': browser.version}
     results.append(entry)
     try:
         if case.startswith('delayed-'):
@@ -109,17 +113,17 @@ async def scenario(browser, case, url, results):
         await settle(page)
         entry['state'] = await page.evaluate(SNAPSHOT)
         print(json.dumps(entry), flush=True)
-        await page.screenshot(path=str(OUT / f'{case}-initial.png'))
         state = entry['state']
-        assert state['secure'], 'WebGPU tests must navigate to a secure/trustworthy origin; set_content is not sufficient'
-        if case in ('no-webgpu', 'pipeline-rejected'):
+        assert state['secure'], 'WebGPU tests require a real secure/trustworthy origin, not set_content'
+        fallback = case in ('no-webgpu', 'pipeline-rejected')
+        if fallback:
             assert state['mode'] == 'Canvas 2D' and not state['gpuClass'] and not state['device'], state
             if case == 'pipeline-rejected':
                 assert 'Injected pipeline rejection' in state['reason']
         else:
             assert state['mode'] == 'WebGPU' and state['device'] and state['pipeline'] and state['uniform'], state
             assert state['gpuClass'] and state['textures'] > 0, state
-        await pixels(page, case)
+        await pixels(page, case, expected='Canvas 2D' if fallback else 'WebGPU')
         if case.startswith('delayed-'):
             before = entry['duringInitialization']
             assert not before['device'] and not before['gpuClass'] and not before['reason'], before
@@ -138,15 +142,12 @@ async def scenario(browser, case, url, results):
             await pixels(page, 'rotate')
             await page.evaluate('folio.gpu.device.destroy()')
             await page.wait_for_function("folio.gpu.mode === 'Canvas 2D' && !document.body.classList.contains('gpu-on')")
-            await pixels(page, 'device-loss-fallback')
+            await pixels(page, 'device-loss-fallback', expected='Canvas 2D')
             assert not await page.evaluate('!!folio.gpu.device || !!folio.gpu.frame')
         assert not errors and not console_errors, {'pageErrors': errors, 'consoleErrors': console_errors}
         entry['passed'] = True
     except Exception as error:
-        entry['passed'] = False
-        entry['error'] = str(error)
-        entry['pageErrors'] = errors
-        entry['consoleErrors'] = console_errors
+        entry.update(passed=False, error=str(error), pageErrors=errors, consoleErrors=console_errors)
         try:
             entry['failureState'] = await page.evaluate(SNAPSHOT)
             await page.screenshot(path=str(OUT / f'{case}-failure.png'))
@@ -168,15 +169,12 @@ async def main():
             await asyncio.sleep(1)
             assert server.poll() is None, 'Local server failed to start'
         async with async_playwright() as playwright:
-            options = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {'channel': 'chromium'}
-            flags = ['--no-sandbox', '--enable-unsafe-webgpu']
-            if sys.platform == 'linux':
-                # ANGLE handles browser presentation in software; Dawn chooses its
-                # own WebGPU backend. Do not force Vulkan for the browser compositor
-                # or disable its presentation surface on GPU-less CI machines.
-                flags += ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
-            browser = await playwright.chromium.launch(
-                headless=os.environ.get('FOLIO_HEADED') != '1', args=flags, **options)
+            options = chromium_options()
+            print('Browser launch: ' + json.dumps(options), flush=True)
+            browser = await playwright.chromium.launch(**options)
+            session = await browser.new_browser_cdp_session()
+            (OUT / 'gpu-system-info.json').write_text(json.dumps(await session.send('SystemInfo.getInfo'), indent=2))
+            await session.detach()
             for case in CASES:
                 assert case in {'normal', 'delayed-shader', 'delayed-pipeline', 'no-webgpu', 'pipeline-rejected'}, case
                 try:

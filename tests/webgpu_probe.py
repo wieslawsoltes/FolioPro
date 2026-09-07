@@ -4,6 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 from playwright.async_api import async_playwright
+from browser_runtime import chromium_options
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'tests/out/rendering'
@@ -16,9 +17,7 @@ async def main():
     try:
         await asyncio.sleep(1)
         async with async_playwright() as p:
-            browser = await p.chromium.launch(channel='chromium', headless=False, args=[
-                '--no-sandbox', '--enable-unsafe-webgpu', '--use-gl=angle',
-                '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-logging=stderr'])
+            browser = await p.chromium.launch(**chromium_options())
             page = await browser.new_page()
             page.on('console', lambda msg: print(f'PROBE CONSOLE {msg.type}: {msg.text}', flush=True))
             await page.goto('http://127.0.0.1:4173/tests/out/rendering/probe.html')
@@ -72,6 +71,8 @@ async def main():
                     entry['error'] = str(error)
                 results.append(entry)
                 print('WEBGPU PROBE ' + json.dumps(entry), flush=True)
+            session = await browser.new_browser_cdp_session()
+            (OUT / 'probe-gpu-system-info.json').write_text(json.dumps(await session.send('SystemInfo.getInfo'),indent=2))
             await browser.close()
     finally:
         (OUT / 'probe-results.json').write_text(json.dumps(results,indent=2))
