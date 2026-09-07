@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+import sys
 
 from PIL import Image
 from playwright.async_api import async_playwright
@@ -138,6 +139,7 @@ async def scenario(browser, case, url, results):
         entry['error'] = str(error)
         entry['pageErrors'] = errors
         entry['consoleErrors'] = console_errors
+        print(json.dumps({'diagnostics': entry}), flush=True)
         try:
             entry['failureState'] = await page.evaluate(SNAPSHOT)
             await page.screenshot(path=str(OUT / f'{case}-failure.png'))
@@ -158,11 +160,16 @@ async def main():
             await asyncio.sleep(1)
             assert server.poll() is None, 'Local server failed to start'
         async with async_playwright() as playwright:
-            options = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {}
-            browser = await playwright.chromium.launch(headless=True, args=[
-                '--no-sandbox', '--enable-unsafe-webgpu', '--use-angle=swiftshader',
-                '--use-webgpu-adapter=swiftshader', '--enable-unsafe-swiftshader'
-            ], **options)
+            options = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {'channel': 'chromium'}
+            # Full Chromium under Xvfb exercises actual window compositing on CI.
+            # Headless shell does not reliably present WebGPU swapchains on Linux.
+            flags = ['--no-sandbox', '--enable-unsafe-webgpu']
+            if sys.platform == 'linux':
+                flags += ['--enable-features=Vulkan', '--use-angle=vulkan',
+                          '--use-vulkan=swiftshader', '--use-webgpu-adapter=swiftshader',
+                          '--disable-vulkan-surface', '--enable-unsafe-swiftshader']
+            browser = await playwright.chromium.launch(
+                headless=os.environ.get('FOLIO_HEADED') != '1', args=flags, **options)
             for case in CASES:
                 assert case in {'normal', 'delayed-shader', 'delayed-pipeline', 'no-webgpu', 'pipeline-rejected'}, case
                 try:
