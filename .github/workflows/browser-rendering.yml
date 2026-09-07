@@ -28,12 +28,19 @@ jobs:
       - run: python -m pip install playwright==1.57.0 Pillow==12.0.0
       - run: python -m playwright install --with-deps --no-shell chromium
       - run: npm run build
+      - name: Probe native WebGPU device and presentation paths
+        env:
+          DEBUG: pw:browser
+        run: |
+          mkdir -p tests/out/rendering
+          xvfb-run -a python tests/webgpu_probe.py 2>tests/out/rendering/probe-chromium.log
       - name: Verify real WebGPU and Canvas fallback pixels
         env:
           FOLIO_HEADED: '1'
           FOLIO_URL: ${{ inputs.url }}
           FOLIO_CASES: ${{ inputs.cases }}
-        run: xvfb-run -a python tests/browser_rendering.py
+          DEBUG: pw:browser
+        run: xvfb-run -a python tests/browser_rendering.py 2>tests/out/rendering/chromium.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
