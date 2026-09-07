@@ -7,10 +7,13 @@ import sys
 def chromium_options():
     flags = ['--no-sandbox', '--enable-unsafe-webgpu']
     if sys.platform == 'linux':
-        # Select the system Vulkan implementation. CI pins the ICD to Mesa's
-        # lavapipe; merely installing it leaves Chromium on bundled SwiftShader.
-        defaults = ['--enable-features=Vulkan', '--use-angle=vulkan',
-                    '--use-vulkan=native', '--disable-vulkan-surface']
+        # Browser presentation and Dawn must share a compatible Vulkan path.
+        # --enable-gpu opts out of headless forced software compositing. Xvfb
+        # supplies DISPLAY; an adapter alone does not prove canvas presentation.
+        # Reproduction and recipe: https://github.com/visgl/luma.gl/issues/2874
+        defaults = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader',
+                    '--ignore-gpu-blocklist', '--enable-gpu',
+                    '--enable-features=Vulkan', '--use-vulkan=swiftshader']
         extra = json.loads(os.environ.get('FOLIO_BROWSER_FLAGS', json.dumps(defaults)))
         if not isinstance(extra, list) or not all(isinstance(v, str) for v in extra):
             raise ValueError('FOLIO_BROWSER_FLAGS must be a JSON array of strings')
