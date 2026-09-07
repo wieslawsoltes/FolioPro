@@ -27,6 +27,14 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install playwright==1.62.0 Pillow==12.0.0
       - run: python -m playwright install --with-deps --no-shell chromium
+      - name: Provision software Vulkan driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1 vulkan-tools
+          driver=$(find /usr/share/vulkan/icd.d -name '*lvp*.json' -print -quit)
+          test -n "$driver"
+          echo "VK_ICD_FILENAMES=$driver" >> "$GITHUB_ENV"
+          echo "VK_DRIVER_FILES=$driver" >> "$GITHUB_ENV"
       - run: npm run build
       - name: Probe native WebGPU device and presentation paths
         env:
