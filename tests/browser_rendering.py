@@ -27,7 +27,7 @@ SNAPSHOT = """() => ({
     uniform: !!folio.gpu.uniform, gpuClass: document.body.classList.contains('gpu-on'),
     textures: folio.gpu.textures.bytes, draws: folio.gpu.draws.length,
     readyPages: [...folio.views.values()].filter(v => v.result).length,
-    frame: folio.gpu.frame
+    frame: folio.gpu.frame, destroys: window.__gpuDestroys || []
 })"""
 
 async def settle(page):
@@ -54,6 +54,16 @@ async def pixels(page, label, index=0):
 async def scenario(browser, case, url, results):
     context = await browser.new_context(viewport={'width': 1666, 'height': 1000}, device_scale_factor=1)
     page = await context.new_page()
+    await page.add_init_script("""
+        window.__gpuDestroys = [];
+        if (globalThis.GPUDevice) {
+            const destroy = GPUDevice.prototype.destroy;
+            GPUDevice.prototype.destroy = function() {
+                window.__gpuDestroys.push(new Error('GPUDevice.destroy').stack);
+                return destroy.call(this);
+            };
+        }
+    """)
     errors, console_errors = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
