@@ -3,6 +3,8 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  browser:
+    uses: ./.github/workflows/browser-rendering.yml
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -12,22 +12,45 @@ export class PageCompositor {
         this.verticesCapacity = 0;
         this.lastFrameMs = 0;
         this.stopped = false;
+        this.generation = 0;
+        this.pendingDevice = null;
+        this.initialization = null;
         this.textures = new ByteLRU(128 * 1024 * 1024, t => t.texture.destroy());
     }
-    async initialize() {
+    initialize() {
+        if (this.stopped)
+            return Promise.resolve(false);
+        // Concurrent callers share one attempt. A failed/disposed attempt must not
+        // publish a stale device when shader/pipeline promises eventually settle.
+        return this.initialization ??= this.initializeDevice();
+    }
+    async initializeDevice() {
+        const generation = ++this.generation;
+        const current = () => !this.stopped && generation === this.generation;
+        let device;
+
         if (!navigator.gpu) {
-            this.onMode?.('Canvas 2D', 'WebGPU is unavailable; explicit Canvas fallback');
+            this.fail('WebGPU is unavailable; explicit Canvas fallback');
             return false;
         }
         try {
             const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+            if (!current())
+                return false;
             if (!adapter)
                 throw Error('No WebGPU adapter');
-            const device = await adapter.requestDevice();
-            this.device = device;
-            device.addEventListener('uncapturederror', e => this.fail(e.error.message));
+            device = await adapter.requestDevice();
+            if (!current())
+                return false;
+            // Keep the device private until every resource required by render()
+            // exists. PDF rasterization and scene updates run during both awaits.
+            this.pendingDevice = device;
+            device.addEventListener('uncapturederror', e => {
+                if (current())
+                    this.fail(e.error.message);
+            });
             device.lost.then(info => {
-                if (!this.stopped)
+                if (current())
                     this.fail(`Device lost: ${info.message || info.reason}`);
             });
             this.context = this.canvas.getContext('webgpu');
@@ -49,27 +72,58 @@ struct Varyings { @builtin(position) position: vec4f, @location(0) uv: vec2f };
 @fragment fn fs(input: Varyings) -> @location(0) vec4f { return textureSample(pageTexture, pageSampler, input.uv); }
 ` });
             const compilation = await module.getCompilationInfo();
+            if (!current())
+                return false;
             const errors = compilation.messages.filter(m => m.type === 'error');
             if (errors.length)
                 throw Error(errors.map(e => e.message).join('\n'));
-            this.pipeline = await device.createRenderPipelineAsync({ label: 'Folio textured pages', layout: 'auto', vertex: { module, entryPoint: 'vs', buffers: [{ arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }, { shaderLocation: 1, offset: 8, format: 'float32x2' }] }] }, fragment: { module, entryPoint: 'fs', targets: [{ format: this.format }] }, primitive: { topology: 'triangle-list' } });
-            this.uniform = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-            this.viewBindGroup = device.createBindGroup({ layout: this.pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
-            this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'nearest' });
+            const pipeline = await device.createRenderPipelineAsync({ label: 'Folio textured pages', layout: 'auto', vertex: { module, entryPoint: 'vs', buffers: [{ arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }, { shaderLocation: 1, offset: 8, format: 'float32x2' }] }] }, fragment: { module, entryPoint: 'fs', targets: [{ format: this.format }] }, primitive: { topology: 'triangle-list' } });
+            if (!current())
+                return false;
+            const uniform = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            const viewBindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }] });
+            const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'nearest' });
+            // Publish the fully initialized rendering state atomically, with no
+            // await between resource publication and the UI's mode notification.
+            Object.assign(this, { device, pipeline, uniform, viewBindGroup, sampler });
+            this.pendingDevice = null;
             this.mode = 'WebGPU';
             this.onMode?.(this.mode, adapter.info?.description || 'GPU page compositing');
             this.invalidate();
             return true;
         }
         catch (error) {
-            this.fail(error.message);
+            if (current())
+                this.fail(error.message);
             return false;
         }
+        finally {
+            // requestDevice() can resolve after disposal, before pendingDevice
+            // was assigned. WebGPU destroy() is idempotent.
+            if (device && device !== this.device)
+                device.destroy();
+        }
+    }
+    releaseResources() {
+        if (this.frame)
+            cancelAnimationFrame(this.frame);
+        this.frame = 0;
+        this.textures.clear();
+        this.vertexBuffer?.destroy();
+        this.uniform?.destroy();
+        this.context?.unconfigure();
+        this.device?.destroy();
+        this.pendingDevice?.destroy();
+        this.device = this.pendingDevice = this.context = null;
+        this.pipeline = this.uniform = this.viewBindGroup = this.sampler = this.vertexBuffer = null;
+        this.verticesCapacity = 0;
     }
     fail(reason) {
+        if (this.stopped)
+            return;
+        ++this.generation;
         this.mode = 'Canvas 2D';
-        this.textures.clear();
-        this.device = null;
+        this.releaseResources();
         this.canvas.style.visibility = 'hidden';
         this.onMode?.(this.mode, reason);
     }
@@ -97,6 +151,10 @@ struct Varyings { @builtin(position) position: vec4f, @location(0) uv: vec2f };
         this.invalidate();
     }
     invalidate() {
+        // setScene retains the newest scene during initialization. initialize()
+        // schedules its first frame after publishing a complete device.
+        if (this.stopped || !this.device)
+            return;
         if (!this.frame)
             this.frame = requestAnimationFrame(() => {
                 this.frame = 0;
@@ -109,7 +167,7 @@ struct Varyings { @builtin(position) position: vec4f, @location(0) uv: vec2f };
             });
     }
     render() {
-        if (!this.device || !this.width || !this.height)
+        if (this.stopped || this.mode !== 'WebGPU' || !this.device || !this.width || !this.height)
             return;
         const start = performance.now(), cw = Math.max(1, Math.floor(this.width * this.dpr)), ch = Math.max(1, Math.floor(this.height * this.dpr));
         if (this.canvas.width !== cw || this.canvas.height !== ch) {
@@ -176,11 +234,9 @@ struct Varyings { @builtin(position) position: vec4f, @location(0) uv: vec2f };
     }
     dispose() {
         this.stopped = true;
-        if (this.frame)
-            cancelAnimationFrame(this.frame);
-        this.textures.clear();
-        this.vertexBuffer?.destroy();
-        this.uniform?.destroy();
-        this.device?.destroy();
+        ++this.generation;
+        this.mode = 'Canvas 2D';
+        this.canvas.style.visibility = 'hidden';
+        this.releaseResources();
     }
 }

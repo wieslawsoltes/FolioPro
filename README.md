@@ -8,7 +8,7 @@ Folio Pro 0.1 is a functional engineering release. It opens and renders real PDF
 
 ## Run immediately
 
-Open **`dist/folio-pro.html`** for the self-contained application. The included Northstar document is generated as a real four-page PDF in memory; it is not an HTML imitation of a document. It includes bookmarks and three actual PDF form widgets. Its business metrics and reviewers are fictional.
+Use the live app above, or run **`npm run build`** and open **`dist/folio-pro.html`** for the self-contained application. Generated `dist/` files are not tracked in Git; CI also makes the standalone HTML available as an artifact. The included Northstar document is generated as a real four-page PDF in memory; it is not an HTML imitation of a document. It includes bookmarks and three actual PDF form widgets. Its business metrics and reviewers are fictional.
 
 For the predictable local-origin environment recommended for WebGPU and IndexedDB, use Node.js 22 or newer:
 
@@ -19,7 +19,7 @@ npm start
 
 No npm installation, build framework, cloud account, API key, or runtime package dependency is required. The modular `index.html` and `src/` tree can also be deployed unchanged to static HTTPS hosting. Do not open the modular entry point directly from `file://`; use the bundled HTML or the supplied server.
 
-The status-bar engine badge reports the real compositor. WebGPU is requested at runtime and Canvas 2D is explicitly used when unavailable. GPU rendering is not emulated by changing a label.
+The status-bar engine badge reports the real compositor. WebGPU is requested at runtime and Canvas 2D is explicitly used when unavailable. GPU rendering is not emulated by changing a label. The compositor keeps Canvas pages available while its GPU pipeline initializes and restores them if GPU initialization or rendering fails.
 
 ## What works
 
@@ -101,21 +101,30 @@ The supplied integration test independently checks the exported file using PyMuP
 ## Tests and reproducible build
 
 ```sh
-npm test        # 41 Node kernel/model tests; no packages required
-npm run build   # bundle own ES modules and CSS into dist/folio-pro.html
+npm test        # 47 Node kernel/model/compositor tests; no packages required
+npm run build   # bundle own ES modules and CSS into dist/folio-pro.html and dist/index.html
 npm run check   # validate source module and standalone bundle syntax
 
 # Optional browser/independent-PDF development tests:
 python -m pip install playwright pymupdf
 # Provide Chromium via CHROMIUM=/path/to/chromium, default /usr/bin/chromium
 npm run test:browser
+
+# Secure-origin WebGPU presentation tests, with CI-pinned browser tooling:
+python -m pip install playwright==1.62.0 Pillow==12.0.0
+python -m playwright install --with-deps --no-shell chromium
+# Linux also requires mesa-vulkan-drivers, libvulkan1, xvfb and xauth:
+xvfb-run -a python tests/webgpu_probe.py
+xvfb-run -a python tests/browser_rendering.py
 ```
 
 Included fixtures were independently generated with ReportLab and PyMuPDF and contain no personal data. The browser suite combines actual pointer/keyboard/dialog interactions with direct core calls for exported-file inspection. Test output is written to `tests/out/`.
 
-Verified in the delivered build: **41/41 Node tests and 22/22 browser integration checks**. The browser was Chromium 144.0.7559.96; exported PDFs were independently parsed and rendered by PyMuPDF 1.26.7. Browser checks cover text creation, search, undo/redo, geometry, comments, form filling, project round-trip, imported images, external object streams, page operations, signatures and sanitized export.
+**47/47 Node tests and 22/22 in-memory Canvas browser integration checks pass.** The latter use Chromium 144.0.7559.96; exported PDFs are independently parsed and rendered by PyMuPDF 1.26.7. They cover text creation, search, undo/redo, geometry, comments, form filling, project round-trip, imported images, external object streams, page operations, signatures and sanitized export.
 
-The managed browser blocked ordinary URL navigation, so integration tests loaded the self-contained document in memory. **The exercised renderer/compositor was native PDF plus Canvas 2D. Hardware WebGPU, persistent-origin IndexedDB, browser print integration, file-origin behavior and the remote PDF.js path were not verified in this environment.** There are no invented GPU benchmarks or cross-browser conformance claims. The application includes those runtime paths, with explicit fallback and diagnostics.
+**The separate secure-origin rendering suite passes five scenarios on Chromium 151.0.7922.34 with the SwiftShader WebGPU adapter.** It verifies actual composited page pixels during normal startup, delayed shader/pipeline initialization, and intentional fallback conditions. Resize, scrolling, zoom, rotation, and device-loss fallback are also exercised. An independent WebGPU canary verifies buffer readback, external-image upload, and known-color canvas presentation. See [rendering regression notes](docs/RENDERING-REGRESSIONS.md) for the failure sequence, browser configuration, evidence and reproduction instructions.
+
+**Software-adapter WebGPU verification is not physical-GPU coverage.** Hardware drivers, persistent-origin IndexedDB recovery, browser print integration, file-origin behavior and the remote PDF.js path have not been independently verified by these suites. There are no claimed GPU performance benchmarks or broad cross-browser conformance guarantees.
 
 ## Source layout
 
@@ -132,6 +141,6 @@ The UI is independently branded and uses original vector icons and system fonts.
 
 ## GitHub Pages
 
-The `Deploy GitHub Pages` workflow validates the kernel/model tests, creates the dependency-free standalone build, checks its JavaScript syntax, uploads `dist/` as a Pages artifact, and deploys the app to **https://wieslawsoltes.github.io/FolioPro/**. It runs on pushes to `main` and can also be started manually from Actions. Pull requests run the separate validation workflow without deploying.
+The `Deploy GitHub Pages` workflow validates the Node and secure-origin browser rendering tests, creates the dependency-free standalone build, checks its JavaScript syntax, uploads `dist/` as a Pages artifact, and deploys to **https://wieslawsoltes.github.io/FolioPro/**. It then checks the served HTML's SHA-256 against the build and runs the normal WebGPU rendering scenario against the live HTTPS URL. It runs on pushes to `main` and can also be started manually from Actions. Pull requests run validation without deploying. Screenshots and diagnostic state are retained as workflow artifacts.
 
 `dist/index.html` and `dist/folio-pro.html` are the same self-contained application. All app resources are embedded, so hosting below the `/FolioPro/` project path does not require rewriting asset URLs. Source PDFs stay in the browser; deploying the application does not upload documents opened by its users. The optional PDF.js compatibility engine remains an explicit internet-dependent choice.
