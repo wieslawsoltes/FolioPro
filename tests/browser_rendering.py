@@ -28,7 +28,7 @@ SNAPSHOT = """() => ({
     uniform: !!folio.gpu.uniform, gpuClass: document.body.classList.contains('gpu-on'),
     textures: folio.gpu.textures.bytes, draws: folio.gpu.draws.length,
     readyPages: [...folio.views.values()].filter(v => v.result).length,
-    frame: folio.gpu.frame, destroys: window.__gpuDestroys || []
+    frame: folio.gpu.frame, events: window.__gpuEvents || []
 })"""
 
 async def settle(page):
@@ -56,12 +56,21 @@ async def scenario(browser, case, url, results):
     context = await browser.new_context(viewport={'width': 1666, 'height': 1000}, device_scale_factor=1)
     page = await context.new_page()
     await page.add_init_script("""
-        window.__gpuDestroys = [];
+        window.__gpuEvents = [];
+        const record = (event, details = {}) => window.__gpuEvents.push({event, time: performance.now(), ...details});
         if (globalThis.GPUDevice) {
             const destroy = GPUDevice.prototype.destroy;
             GPUDevice.prototype.destroy = function() {
-                window.__gpuDestroys.push(new Error('GPUDevice.destroy').stack);
+                record('destroy', {stack: new Error('GPUDevice.destroy').stack});
                 return destroy.call(this);
+            };
+            const request = GPUAdapter.prototype.requestDevice;
+            GPUAdapter.prototype.requestDevice = async function(...args) {
+                const device = await request.apply(this, args);
+                record('device', {adapter: {vendor: this.info?.vendor, architecture: this.info?.architecture, description: this.info?.description}});
+                device.addEventListener('uncapturederror', e => record('error', {message: e.error.message}));
+                device.lost.then(info => record('lost', {reason: info.reason, message: info.message}));
+                return device;
             };
         }
     """)
@@ -93,7 +102,6 @@ async def scenario(browser, case, url, results):
             await page.wait_for_function('window.__releaseGpu && window.folio && [...folio.views.values()].some(v => v.result)', timeout=30000)
             await settle(page)
             entry['duringInitialization'] = await page.evaluate(SNAPSHOT)
-            # Exercise another scheduled render while compilation is suspended.
             await page.evaluate('folio.updateGpu()')
             await settle(page)
             await page.evaluate('window.__releaseGpu()')
@@ -139,12 +147,12 @@ async def scenario(browser, case, url, results):
         entry['error'] = str(error)
         entry['pageErrors'] = errors
         entry['consoleErrors'] = console_errors
-        print(json.dumps({'diagnostics': entry}), flush=True)
         try:
             entry['failureState'] = await page.evaluate(SNAPSHOT)
             await page.screenshot(path=str(OUT / f'{case}-failure.png'))
         except Exception:
             pass
+        print(json.dumps({'diagnostics': entry}), flush=True)
         raise
     finally:
         await context.close()
@@ -161,13 +169,12 @@ async def main():
             assert server.poll() is None, 'Local server failed to start'
         async with async_playwright() as playwright:
             options = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {'channel': 'chromium'}
-            # Full Chromium under Xvfb exercises actual window compositing on CI.
-            # Headless shell does not reliably present WebGPU swapchains on Linux.
             flags = ['--no-sandbox', '--enable-unsafe-webgpu']
             if sys.platform == 'linux':
-                flags += ['--enable-features=Vulkan', '--use-angle=vulkan',
-                          '--use-vulkan=swiftshader', '--use-webgpu-adapter=swiftshader',
-                          '--disable-vulkan-surface', '--enable-unsafe-swiftshader']
+                # ANGLE handles browser presentation in software; Dawn chooses its
+                # own WebGPU backend. Do not force Vulkan for the browser compositor
+                # or disable its presentation surface on GPU-less CI machines.
+                flags += ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
             browser = await playwright.chromium.launch(
                 headless=os.environ.get('FOLIO_HEADED') != '1', args=flags, **options)
             for case in CASES:
