@@ -9,6 +9,8 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 jobs:
+  browser:
+    uses: ./.github/workflows/browser-rendering.yml
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -37,12 +39,14 @@ jobs:
         with:
           path: dist
   deploy:
-    needs: build
+    needs: [build, browser]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -73,3 +77,10 @@ jobs:
           done
           echo '::error::Published application could not be verified against the build.'
           exit 1
+  verify-rendering:
+    needs: deploy
+    uses: ./.github/workflows/browser-rendering.yml
+    with:
+      url: ${{ needs.deploy.outputs.page_url }}?deployment=${{ github.sha }}
+      cases: normal
+      artifact-name: live-rendering-verification
